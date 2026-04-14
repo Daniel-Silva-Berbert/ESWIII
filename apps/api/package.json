@@ -7,7 +7,7 @@
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "bdd": "cucumber-js --require-module ts-node/register --require 'features/step-definitions/**/*.ts' 'features/**/*.feature'"
+    "bdd": "cucumber-js --require-module ts-node/register --require \"features/step-definitions/**/*.ts\" \"features/**/*.feature\""
   },
   "keywords": [],
   "author": "",
@@ -19,7 +19,7 @@
     "express": "^5.2.1"
   },
   "devDependencies": {
-    "@cucumber/cucumber": "^12.7.0",
+    "@cucumber/cucumber": "^12.8.1",
     "@types/chai": "^5.2.3",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
