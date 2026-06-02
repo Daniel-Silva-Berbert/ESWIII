@@ -1,0 +1,108 @@
+# Docker Compose do projeto Docker Toy Example.
+# Ele sobe os containers de backend, frontend, banco, painel do banco e storage.
+
+services:
+  # Backend Node.js + TypeScript.
+  api:
+    # Builda a imagem usando o Dockerfile dentro de ./api.
+    build:
+      context: ./api
+    container_name: docker-toy-api
+    ports:
+      # host:container
+      - "3000:3000"
+    environment:
+      # Porta interna usada pela API.
+      PORT: 3000
+      # Origem permitida pelo CORS.
+      FRONTEND_URL: http://localhost:5173
+      # Dentro da rede Docker, o host do MongoDB e o nome do servico: mongodb.
+      MONGODB_URI: mongodb://mongodb:27017/docker-toy-example
+      # A API grava os uploads neste caminho dentro do container.
+      STORAGE_UPLOAD_DIR: /uploads
+      # URL publica usada para salvar imageUrl no MongoDB.
+      STORAGE_PUBLIC_URL: http://localhost:8080/uploads
+    volumes:
+      # Mesmo volume usado pelo storage, mas montado no caminho onde a API escreve.
+      - uploads_data:/uploads
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - docker_toy_network
+
+  # Frontend React compilado pelo Vite e servido com nginx.
+  web:
+    build:
+      context: ./web
+      args:
+        # Esta URL roda no navegador do host, entao usa localhost e a porta publicada da API.
+        VITE_API_URL: http://localhost:3000
+    container_name: docker-toy-web
+    ports:
+      # O nginx do container escuta na porta 80; no host usamos 5173 para estudo.
+      - "5173:80"
+    depends_on:
+      - api
+    networks:
+      - docker_toy_network
+
+  # Banco de dados MongoDB.
+  mongodb:
+    image: mongo:latest
+    container_name: docker-toy-mongodb
+    # Nao publicamos a porta 27017 no host para evitar conflito com MongoDB local.
+    # Os containers acessam o banco pela rede Docker usando mongodb:27017.
+    volumes:
+      # Persistencia dos dados do MongoDB.
+      - mongodb_data:/data/db
+    healthcheck:
+      # Garante que outros servicos aguardem o MongoDB aceitar comandos.
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    networks:
+      - docker_toy_network
+
+  # Interface web para inspecionar o MongoDB.
+  mongo-express:
+    image: mongo-express:latest
+    container_name: docker-toy-mongo-express
+    ports:
+      - "8082:8081"
+    environment:
+      # URL interna do MongoDB dentro da rede Docker.
+      ME_CONFIG_MONGODB_URL: mongodb://mongodb:27017
+      # Desabilita autenticacao basica para simplificar o toy example local.
+      ME_CONFIG_BASICAUTH: "false"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - docker_toy_network
+
+  # Storage HTTP para servir imagens enviadas pela API.
+  storage:
+    image: nginx:alpine
+    container_name: docker-toy-storage
+    ports:
+      - "8080:80"
+    volumes:
+      # Configuracao nginx dedicada para servir /uploads.
+      - ./infra/storage/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # Mesmo volume usado pela API, montado no diretorio publico do nginx.
+      - uploads_data:/usr/share/nginx/html/uploads
+    networks:
+      - docker_toy_network
+
+# Rede propria para os servicos se comunicarem por nome.
+networks:
+  docker_toy_network:
+    driver: bridge
+
+# Volumes nomeados para persistir dados mesmo apos parar/remover containers.
+volumes:
+  mongodb_data:
+  uploads_data:
