@@ -162,15 +162,14 @@ mkdir -p features/step-definitions
 ```
 
 - Editar `cucumber.js`
-
 ```js
 module.exports = {
   default: {
-    requireModule: ["ts-node/register"],
-    require: ["features/step-definitions/**/*.ts"],
-    paths: ["features/**/*.feature"],
-  },
-};
+    requireModule: ['ts-node/register'],
+    require: ['features/step-definitions/**/*.ts'],
+    paths: ['features/**/*.feature']
+  }
+}
 ```
 
 **Testando o BDD**
