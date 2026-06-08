@@ -22,7 +22,9 @@ BeforeAll(async function () {
   process.env.MONGODB_DATABASE =
     process.env.MONGODB_TEST_DATABASE || "ecommerce_test";
 
-  await connectDatabase();
+  await connectDatabase({
+    serverSelectionTimeoutMS: 5000,
+  });
 });
 
 Before(async function () {

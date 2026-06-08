@@ -47,7 +47,10 @@ Then(
 );
 
 Then("a resposta deve conter o último carrinho cadastrado", function () {
-  expect(response.body).to.deep.equal(carrinhosIniciais[1]);
+  const ultimoCarrinho = carrinhosIniciais.at(-1);
+
+  expect(ultimoCarrinho).to.not.equal(undefined);
+  expect(response.body).to.deep.equal(ultimoCarrinho);
 });
 
 Then("a resposta deve conter o carrinho salvo", function () {

@@ -1,9 +1,12 @@
 # Nome exibido na aba "Actions" do GitHub
 name: CI - Testes da API
 
-# Gatilho: o workflow será executado sempre que houver push em qualquer branch do repositório
+# Gatilhos: o workflow roda em pushes e pull requests de qualquer branch
 on:
   push:
+    branches:
+      - "**"
+  pull_request:
     branches:
       - "**"
 
@@ -21,6 +24,24 @@ jobs:
 
     # Ambiente virtual usado pelo GitHub Actions
     runs-on: ubuntu-latest
+
+    # Variaveis usadas pelos cenarios BDD para conectar no MongoDB do job
+    env:
+      MONGODB_TEST_URI: mongodb://127.0.0.1:27017
+      MONGODB_TEST_DATABASE: ecommerce_test_ci
+
+    # Banco MongoDB usado pelos testes BDD da API
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand(\"ping\").ok'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+          --health-start-period 10s
 
     steps:
       # Baixa o código do repositório para dentro da máquina virtual do GitHub Actions
@@ -48,6 +69,6 @@ jobs:
       - name: Executar testes unitários
         run: npm run test:unit
 
-      # Executa os testes de aceitação/BDD da API
+      # Executa os testes de aceitação(BDD) da API
       - name: Executar testes BDD
         run: npm run test:bdd
