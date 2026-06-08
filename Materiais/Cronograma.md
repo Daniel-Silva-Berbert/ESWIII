@@ -1164,9 +1164,12 @@ Then("a resposta deve informar que o usuário não foi encontrado", function () 
 # Nome exibido na aba "Actions" do GitHub
 name: CI - Testes da API
 
-# Gatilho: o workflow será executado sempre que houver push em qualquer branch do repositório
+# Gatilhos: o workflow roda em pushes e pull requests de qualquer branch
 on:
   push:
+    branches:
+      - "**"
+  pull_request:
     branches:
       - "**"
 
@@ -1184,6 +1187,24 @@ jobs:
 
     # Ambiente virtual usado pelo GitHub Actions
     runs-on: ubuntu-latest
+
+    # Variaveis usadas pelos cenarios BDD para conectar no MongoDB do job
+    env:
+      MONGODB_TEST_URI: mongodb://127.0.0.1:27017
+      MONGODB_TEST_DATABASE: ecommerce_test_ci
+
+    # Banco MongoDB usado pelos testes BDD da API
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand(\"ping\").ok'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+          --health-start-period 10s
 
     steps:
       # Baixa o código do repositório para dentro da máquina virtual do GitHub Actions
@@ -1211,7 +1232,7 @@ jobs:
       - name: Executar testes unitários
         run: npm run test:unit
 
-      # Executa os testes de aceitação/BDD da API
+      # Executa os testes de aceitação(BDD) da API
       - name: Executar testes BDD
         run: npm run test:bdd
 ```
@@ -2908,11 +2929,14 @@ setDefaultTimeout(15000);
 
 BeforeAll(async function () {
   process.env.MONGODB_URI =
-    process.env.MONGODB_TEST_URI || "mongodb://127.0.0.1:27277";
+    process.env.MONGODB_TEST_URI ||
+    "mongodb://127.0.0.1:27277";
   process.env.MONGODB_DATABASE =
     process.env.MONGODB_TEST_DATABASE || "ecommerce_test";
 
-  await connectDatabase();
+  await connectDatabase({
+    serverSelectionTimeoutMS: 5000,
+  });
 });
 
 Before(async function () {
@@ -2924,6 +2948,69 @@ Before(async function () {
 
 AfterAll(async function () {
   await disconnectDatabase();
+});
+```
+
+- Editar `features/step-definitions/carrinhos/carrinho.steps.ts`
+
+```ts
+import { Given, Then, When } from "@cucumber/cucumber";
+import { expect } from "chai";
+import request from "supertest";
+
+import app from "../../../src/app";
+import {
+  carrinhosIniciais,
+  produtosIniciais,
+} from "../../../src/database/seeds/dados-iniciais";
+import { Carrinho } from "../../../src/model/carrinho";
+import { carrinhoRepository } from "../../../src/repository/carrinhos";
+
+let response: request.Response;
+
+const carrinhoParaSalvar: Carrinho = {
+  itens: [
+    {
+      ...produtosIniciais[0]!,
+      quantidade: 3,
+    },
+  ],
+};
+
+Given("existem carrinhos cadastrados", async function () {
+  await carrinhoRepository.replaceAll(carrinhosIniciais);
+});
+
+When(
+  "eu envio uma requisição GET de carrinho para {string}",
+  async function (endpoint: string) {
+    response = await request(app).get(endpoint);
+  },
+);
+
+When(
+  "eu envio uma requisição POST de carrinho para {string}",
+  async function (endpoint: string) {
+    response = await request(app).post(endpoint).send(carrinhoParaSalvar);
+  },
+);
+
+Then(
+  "o status da resposta de carrinho deve ser {int}",
+  function (statusCode: number) {
+    expect(response.status).to.equal(statusCode);
+  },
+);
+
+Then("a resposta deve conter o último carrinho cadastrado", function () {
+  const ultimoCarrinho = carrinhosIniciais.at(-1);
+
+  expect(ultimoCarrinho).to.not.equal(undefined);
+  expect(response.body).to.deep.equal(ultimoCarrinho);
+});
+
+Then("a resposta deve conter o carrinho salvo", function () {
+  expect(response.body).to.deep.equal(carrinhoParaSalvar);
 });
 ```
 
@@ -3106,10 +3193,12 @@ function getMongoUri(): string {
 }
 
 function getMongoDatabase(): string {
-  return process.env.MONGODB_DATABASE || "ecommerce_dev";
+  return process.env.MONGODB_DATABASE || "ecommerce";
 }
 
-export async function connectDatabase(): Promise<typeof mongoose> {
+export async function connectDatabase(
+  options: mongoose.ConnectOptions = {},
+): Promise<typeof mongoose> {
   if (mongoose.connection.readyState === 1) {
     return mongoose;
   }
@@ -3121,6 +3210,7 @@ export async function connectDatabase(): Promise<typeof mongoose> {
   connectionPromise = mongoose
     .connect(getMongoUri(), {
       dbName: getMongoDatabase(),
+      ...options,
     })
     .catch((error: unknown) => {
       connectionPromise = null;
